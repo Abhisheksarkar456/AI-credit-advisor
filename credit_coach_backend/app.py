@@ -1,8 +1,6 @@
-
 import os
 import uuid
 from flask import Flask, request, jsonify
-import boto3
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -16,9 +14,9 @@ bedrock_agent_runtime = boto3.client("bedrock-agent-runtime", region_name=AWS_RE
 
 @app.route("/query", methods=["POST"])
 def query_agent():
-    data = request.get_json()
+    data = request.get_json(force=True, silent=True)
     user_message = data.get("message", "")
-    session_id = str(uuid.uuid4())  # New session for each request
+    session_id = str(uuid.uuid4())
     try:
         response = bedrock_agent_runtime.invoke_agent(
             agentId=AGENT_ID,
@@ -26,14 +24,9 @@ def query_agent():
             sessionId=session_id,
             inputText=user_message
         )
-        print("Bedrock response:", response)  # Log full response
-        text = ""
-        for event in response.get("completion", []):
-            if "chunk" in event:
-                text += event["chunk"]["bytes"].decode("utf-8")
+        text = "".join(event.get("chunk", {}).get("bytes", b"").decode("utf-8", "replace") for event in response.get("completion", []))
         return jsonify({"reply": text})
     except Exception as e:
-        print("Error:", e)
         return jsonify({"reply": f"Error: {str(e)}"}), 500
 
 if __name__ == "__main__":
